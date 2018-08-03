@@ -4,7 +4,7 @@ from sc2.player import Bot, Computer
 from sc2.constants import *
 import random
 
-class mybot(sc2.BotAI):
+class charles(sc2.BotAI):
     def __init__(self):
         self.MAX_WORKERS = 70
         self.attack1_started = False
@@ -232,7 +232,7 @@ class mybot(sc2.BotAI):
 
 def main():
     run_game(maps.get("AcidplantLE"), [
-        Bot(Race.Zerg, mybot()),
+        Bot(Race.Zerg, charles()),
         Computer(Race.Random, Difficulty.Harder)
     ], realtime=False)
 
