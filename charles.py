@@ -20,8 +20,10 @@ class charles(sc2.BotAI):
         self.training_ultras = False
         self.training_hydras = False
         self.training_lings = False
+        self.training_roaches = False
         self.training_count = 0
         self.building_spawningpool = False
+        self.building_roachwarren = False
         self.building_hydraliskden = False
         self.building_ultraliskcavern = False
         self.building_infestationpit = False
@@ -32,78 +34,62 @@ class charles(sc2.BotAI):
         # we need to do things like distribute workers, build workers, build queens, build vespense every step
         # Every so often, we should do randomly, Build army, expand, tech up, upgrade.
 
-        if iteration % 100 == 0:
+        if iteration % 25 == 0:
             if not self.expanding and not self.building_army and not self.teching and not self.upgrading:
                 choice = random.randint(1, 5)
                 if choice == 1:
                     self.expanding = await self.build_expand()
-                    await self.chat_send("I'm expanding!")
 
                 if choice == 2:
                     self.building_army = await self.build_army()
-                    await self.chat_send("I'm building some army units!")
 
                 if choice == 3:
                     self.teching = await self.tech_up()
-                    await self.chat_send("I'm teching up!")
 
                 if choice == 4:
-                    self.upgrading = await self.get_upgrades()
-                    await self.chat_send("I'm upgrading!")
+                    self.teching = True
+                    #self.upgrading = await self.get_upgrades()
+                    await self.chat_send("I'm upgrading! but really im teching for now.")
             else:
                 # we're already doing something, so just keep doing that thing.
 
                 if self.expanding:
                     self.expanding = await self.build_expand()
-                    await self.chat_send("I'm expanding!")
 
                 if self.building_army:
                     self.building_army = await self.build_army()
-                    await self.chat_send("I'm building some army units!")
 
                 if self.teching:
                     self.teching = await self.tech_up()
-                    await self.chat_send("I'm teching up!")
 
                 if self.upgrading:
-                    self.upgrading = await self.get_upgrades()
-                    await self.chat_send("I'm upgrading!")
+                    #self.upgrading = await self.get_upgrades()
+                    await self.chat_send("I'm upgrading!  ")
 
-        if iteration % 5 == 0:
+        if iteration % 10 == 0:
 
             await self.gather_army()
             await self.build_extractor()
-            await self.attac()
+            await self.attac(iteration)
             await self.inject_larva()
             await self.build_overlord()
 
             await self.distribute_workers()
-            self.num_of_bases = self.units(UnitTypeId.HIVE).ready.exists.amount
-            self.num_of_bases += self.units(UnitTypeId.LAIR).ready.exists.amount
-            self.num_of_bases += self.units(UnitTypeId.HATCHERY).ready.exists.amount
 
-            if self.units(UnitTypeId.DRONE).amount < 18 * self.units(UnitTypeId) and self.units(UnitTypeId.DRONE).amount > self.MAX_WORKERS:
+            self.num_of_bases = self.units(UnitTypeId.HIVE).ready.amount
+            self.num_of_bases += self.units(UnitTypeId.LAIR).ready.amount
+            self.num_of_bases += self.units(UnitTypeId.HATCHERY).ready.amount
+
+            if self.units(UnitTypeId.DRONE).amount < 18 * self.num_of_bases and self.units(UnitTypeId.DRONE).amount < self.MAX_WORKERS:
                 await self.build_workers()
 
             await self.build_queens()
-
-    async def build_infest_pit(self):
-        hq = self.townhalls.first
-        if self.units(UnitTypeId.LAIR).ready.exists or self.units(UnitTypeId.HIVE).ready.exists:
-            if not self.units(UnitTypeId.INFESTATIONPIT).ready.exists and not self.already_pending(UnitTypeId.INFESTATIONPIT):
-                while self.minerals < 200 and self.vespene < 150:
-                    if self.can_afford(UnitTypeId.INFESTATIONPIT):
-                        await self.build(UnitTypeId.INFESTATIONPIT, near=hq)
-                        return True
-            else:
-                return False
-        else:
-            return False
 
     async def tech_up(self):
         hq = self.townhalls.first
 
         ultra_cavern = self.units(UnitTypeId.ULTRALISKCAVERN).exists
+        roach_warren = self.units(UnitTypeId.ROACHWARREN).exists
         a_hive = self.units(UnitTypeId.HIVE).exists
         infest_pit = self.units(UnitTypeId.INFESTATIONPIT).exists
         hydra_den = self.units(UnitTypeId.HYDRALISKDEN).exists
@@ -112,39 +98,58 @@ class charles(sc2.BotAI):
 
         # check if we're done teching...
         if ultra_cavern and a_hive and infest_pit and hydra_den and a_lair and spawning_pool:
-            self.upgrading = True
+            # self.upgrading = True
+            await self.chat_send("We're actually done teching so I guess we'll do upgrades")
             return False
 
         # if we're not currently doing something
-        if not self.building_spawningpool and not self.building_lair and not self.building_hydraliskden and not self.building_infestationpit and not self.building_hive and not self.building_ultralistcavern:
-            choice = random.randint(1, 7)
+        if not self.building_spawningpool and not self.building_lair and not self.building_hydraliskden and not self.building_infestationpit and not self.building_hive and not self.building_ultraliskcavern and not self.building_roachwarren:
+            choice = random.randint(1, 8)
 
-            if choice == 1 and self.units(UnitTypeId.HIVE).ready.exists and not self.units(UnitTypeId.ULTRALISKCAVERN).ready.exists and not self.already_pending(UnitTypeId.ULTRALISKCAVERN):
-                self.building_ultraliskcavern = True
-            else:
-                choice = random.randint(2, 7)
+            if choice == 1 and self.units(UnitTypeId.HIVE).ready.exists:
+                if not self.units(UnitTypeId.ULTRALISKCAVERN).ready.exists and not self.already_pending(UnitTypeId.ULTRALISKCAVERN):
+                    self.building_ultraliskcavern = True
+                    await self.chat_send("I'm building an ultra cavern!")
+                else:
+                    self.building_ultraliskcavern = False
+                    self.building_army = True
+                    return False
+            elif not self.units(UnitTypeId.HIVE).ready.exists:
+                choice = 2
 
             if choice == 2 and self.units(UnitTypeId.INFESTATIONPIT).ready.exists and not self.units(UnitTypeId.HIVE).ready.exists and not self.already_pending(UnitTypeId.HIVE):
                 self.building_hive = True
+                await self.chat_send("I'm building a hive")
             else:
-                choice = random.randint(2, 7)
+                choice = 3
 
-            if choice == 3 and self.units(UnitTypeId.LAIR).ready.exists and not self.units(UnitTypeId.INFESTATIONPIT) and not self.already_pending(UnitTypeId.INFESTATIONPIT):
+            if choice == 3 and self.units(UnitTypeId.LAIR).ready.exists and not self.units(UnitTypeId.INFESTATIONPIT).ready.exists and not self.already_pending(UnitTypeId.INFESTATIONPIT):
                 self.building_infestationpit = True
+                await self.chat_send("I'm building an infestation pit")
+
             else:
-                choice = random.randint(5, 7)
+                choice = 4
 
             if choice == 4 and self.units(UnitTypeId.LAIR).ready.exists and not self.units(UnitTypeId.HYDRALISKDEN).ready.exists and not self.already_pending(UnitTypeId.HYDRALISKDEN):
+                await self.chat_send("I'm building a hydra den")
                 self.building_hydraliskden = True
             else:
-                choice = random.randint(5, 7)
+                choice = 5
 
-            if choice == 5 and self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and not self.units(UnitTypeId.LAIR).ready.exists and not self.already_pending(UnitTypeId.LAIR):
+            if choice == 5 and self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and not self.units(UnitTypeId.HIVE) and not self.units(UnitTypeId.LAIR).ready.exists and not self.already_pending(UnitTypeId.LAIR):
+                await self.chat_send("I'm building a LAIR")
                 self.building_lair = True
             else:
                 choice = 6
 
-            if choice == 6 if :
+            if choice == 6 and self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and not self.units(UnitTypeId.ROACHWARREN).ready.exists and not self.already_pending(UnitTypeId.ROACHWARREN):
+                await self.chat_send("I'm building a roach warren")
+                self.building_roachwarren = True
+            else:
+                choice = 7
+
+            if choice == 7 and not self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and not self.already_pending(UnitTypeId.SPAWNINGPOOL):
+                await self.chat_send("I'm building a spawning pool")
                 self.building_spawningpool = True
 
         # build a building
@@ -195,6 +200,15 @@ class charles(sc2.BotAI):
                 return True
 
         # build a building
+        if self.building_roachwarren:
+            if self.can_afford(UnitTypeId.ROACHWARREN):
+                await self.build(UnitTypeId.ROACHWARREN, near=hq)
+                self.building_roachwarren = False
+                return False
+            else:
+                return True
+
+        # build a building
         if self.building_spawningpool:
             if self.can_afford(UnitTypeId.SPAWNINGPOOL):
                 await self.build(UnitTypeId.SPAWNINGPOOL, near=hq)
@@ -206,28 +220,36 @@ class charles(sc2.BotAI):
     async def build_army(self):
         larvae = self.units(UnitTypeId.LARVA)
         # if any of the training flags are true, build. Otherwise, if they're not, get choice. and set the flags.
-        if not self.training_hydras and not self.training_lings and not self.training_ultras:
-
-            choice = random.randint(1, 4)
+        if not self.training_hydras and not self.training_lings and not self.training_ultras and not self.training_roaches:
+            choice = random.randint(1, 5)
 
             if choice == 1 and self.units(UnitTypeId.ULTRALISKCAVERN).ready.exists:
                 self.training_ultras = True
+                await self.chat_send("I'm training an ultra")
             else:
-                choice = random.randint(2, 4)
+                choice = 2
 
             if choice == 2 and self.units(UnitTypeId.HYDRALISKDEN).ready.exists:
                 self.training_hydras = True
+                await self.chat_send("I'm training 2 hydras")
             else:
                 choice = 3
 
-            if choice == 3 and self.units(UnitTypeId.SPAWNINGPOOL).ready.exists:
+            if choice == 3 and self.units(UnitTypeId.ROACHWARREN).ready.exists:
+                await self.chat_send("I'm training some roaches")
+                self.training_roaches = True
+            else:
+                choice = 4
+
+            if choice == 4 and self.units(UnitTypeId.SPAWNINGPOOL).ready.exists:
+                await self.chat_send("I'm training 8 zerglings")
                 self.training_lings = True
 
 
         # build some units.
         if self.training_ultras:
             if self.can_afford(UnitTypeId.ULTRALISK) and larvae.exists:
-                await self.build(UnitTypeId.ULTRALISKCAVERN, near=hq)
+                await self.do(larvae.random.train(UnitTypeId.ULTRALISK))
                 self.training_ultras = False
                 return False
             else:
@@ -258,80 +280,38 @@ class charles(sc2.BotAI):
             else:
                 return True
 
+        if self.training_roaches:
+            if self.can_afford(UnitTypeId.ROACH) and larvae.exists:
+                await self.do(larvae.random.train(UnitTypeId.ROACH))
+                self.training_count += 1
+                if self.training_count > 2:
+                    self.training_roaches = False
+                    return False
+                else:
+                    return True
+            else:
+                return True
 
     async def build_expand(self):
-        if self.townhalls.amount < 4 and not self.already_pending(UnitTypeId.HATCHERY):
-            if self.can_afford(UnitTypeId.HATCHERY):
+        if self.townhalls.amount < 3:
+            if self.can_afford(UnitTypeId.HATCHERY) and not self.already_pending(UnitTypeId.HATCHERY):
                 location = await self.get_next_expansion()
                 await self.build(UnitTypeId.HATCHERY, near=location)
+                await self.chat_send("I'm expanding!")
                 return False
             else:
                 return True
         else:
-            return True
+            # if we have a bunch of expansions already, just build more army units.
+            await self.chat_send("I wanted to expand, but I guess I'll build an army instead.")
+            self.building_army = True
+            return False
 
 
     async def gather_army(self):
         choice = random.randint(1, 2)
         # we want to put our units maybe in the middle of all of our town halls?
         # select them all and put them
-
-    async def build_baneling_nest(self):
-        hq = self.townhalls.first
-        if self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and self.vespene > 300:
-            if not self.already_pending(UnitTypeId.BANELINGNEST) and self.can_afford(UnitTypeId.BANELINGNEST) and not self.units(UnitTypeId.BANELINGNEST):
-                await self.build(UnitTypeId.BANELINGNEST, near=hq)
-
-    async def build_ultra_cavern(self):
-        hq = self.townhalls.first
-        if not self.units(UnitTypeId.ULTRALISKCAVERN).ready.exists and not self.already_pending(UnitTypeId.ULTRALISKCAVERN):
-            while self.minerals < 300 and self.vespene < 150:
-                if self.can_afford(UnitTypeId.ULTRALISKCAVERN):
-                    await self.build(UnitTypeId.ULTRALISKCAVERN, near=hq)
-                    return True
-            else:
-                return False
-
-    async def upgrade_to_lair(self):
-        hq = self.townhalls.first
-        if self.units(UnitTypeId.SPAWNINGPOOL).ready.exists:
-            if not self.units(UnitTypeId.LAIR).exists and not self.units(UnitTypeId.HIVE).exists and hq.noqueue and not self.lair_started:
-                while True:
-                    if self.can_afford(UnitTypeId.LAIR):
-                        await self.do(hq.build(UnitTypeId.LAIR))
-                        self.lair_started = True
-                        return True
-            else:
-                return False
-        else:
-            return False
-
-    async def upgrade_to_hive(self):
-        lair = self.units(UnitTypeId.LAIR).ready
-        infest = self.units(UnitTypeId.INFESTATIONPIT).ready
-        if lair.exists and infest.exists:
-            if not self.units(UnitTypeId.HIVE).exists and lair.noqueue and not self.hive_started:
-                while self.minerals < 300 and self.vespene < 200:
-                    if self.can_afford(UnitTypeId.HIVE):
-                        await self.do(lair.first.build(UnitTypeId.HIVE))
-                        self.hive_started = True
-                        return True
-            else:
-                return False
-        return False
-
-    async def build_hydra_den(self):
-        hq = self.townhalls.first
-        if self.units(UnitTypeId.LAIR).ready.exists or self.units(UnitTypeId.HIVE).ready.exists:
-            if not self.units(UnitTypeId.HYDRALISKDEN).ready.exists and not self.already_pending(UnitTypeId.HYDRALISKDEN):
-                while self.minerals < 200 and self.vespene < 150:
-                    if self.can_afford(UnitTypeId.HYDRALISKDEN):
-                        await self.build(UnitTypeId.HYDRALISKDEN, near=hq)
-                        return True
-            else:
-                return False
-        else:
-            return False
 
     async def get_upgrades(self):
         await self.build_evo()
@@ -401,10 +381,11 @@ class charles(sc2.BotAI):
     async def build_queens(self):
         hqs = self.townhalls.ready
         for hq in hqs:
-            if self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and self.units(UnitTypeId.QUEEN).amount <= self.townhalls.amount + 1:
+            if self.units(UnitTypeId.SPAWNINGPOOL).ready.exists and self.units(UnitTypeId.QUEEN).amount <= self.townhalls.amount:
                 if not self.already_pending(UnitTypeId.QUEEN):
                     if self.can_afford(UnitTypeId.QUEEN):
-                        await self.do(hq.train(UnitTypeId.QUEEN))
+                        if hq.noqueue:
+                            await self.do(hq.train(UnitTypeId.QUEEN))
 
     async def inject_larva(self):
         hq = self.townhalls.random
@@ -413,15 +394,9 @@ class charles(sc2.BotAI):
             if AbilityId.EFFECT_INJECTLARVA in abilities:
                 await self.do(queen(AbilityId.EFFECT_INJECTLARVA, hq))
 
-    async def expand(self):
-        if self.townhalls.amount < 4 and not self.already_pending(UnitTypeId.HATCHERY):
-            if self.can_afford(UnitTypeId.HATCHERY):
-                location = await self.get_next_expansion()
-                await self.build(UnitTypeId.HATCHERY, near=location)
-
-    async def attac(self):
-        forces = self.units(UnitTypeId.ZERGLING) | self.units(UnitTypeId.HYDRALISK) | self.units(UnitTypeId.ULTRALISK) | self.units(UnitTypeId.BANELING)
-        if forces.amount > (self.supply_used / 3):
+    async def attac(self, iteration):
+        forces = self.units(UnitTypeId.ZERGLING) | self.units(UnitTypeId.HYDRALISK) | self.units(UnitTypeId.ULTRALISK) | self.units(UnitTypeId.ROACH)
+        if forces.amount > (iteration / 1000) + 5 or self.supply_used < 190:
             for unit in forces.idle:
                 await self.do(unit.attack(self.select_target()))
 
@@ -440,22 +415,6 @@ class charles(sc2.BotAI):
             if self.can_afford(UnitTypeId.OVERLORD) and not self.already_pending(UnitTypeId.OVERLORD) and larvae.exists:
                 await self.do(larvae.random.train(UnitTypeId.OVERLORD))
 
-    async def build_spawning_pool(self):
-        hq = self.townhalls.first
-        if not (self.units(UnitTypeId.SPAWNINGPOOL).exists or not self.already_pending(UnitTypeId.SPAWNINGPOOL)):
-            if self.can_afford(UnitTypeId.SPAWNINGPOOL):
-                await self.build(UnitTypeId.SPAWNINGPOOL, near=hq, max_distance=6)
-               # We need to build an extractor as well.
-                while self.minerals < 25:
-                    await self.build_extractor()
-
-                return True
-            else:
-                return False
-        else:
-            return False
-
-
     def select_target(self):
         if self.known_enemy_units.exists:
             return random.choice(self.known_enemy_units).position
@@ -467,7 +426,7 @@ class charles(sc2.BotAI):
 def main():
     run_game(maps.get("AcidplantLE"), [
         Bot(Race.Zerg, charles()),
-        Computer(Race.Random, Difficulty.Harder)
+        Computer(Race.Random, Difficulty.Medium)
     ], realtime=False)
 
 if __name__ == '__main__':
